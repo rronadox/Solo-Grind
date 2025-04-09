@@ -1,70 +1,103 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import config from "../config";
 
+// Using imported config instead of dotenv
+
+// Simple logging function
+function serverLog(message: string, level: string = "info") {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+  
+  // Log to console
+  console.log(logMessage);
+  
+  // Also call the original log function for compatibility with the source parameter
+  log(message, level === "info" ? "server" : level);
+}
+
+// Create Express application
 const app = express();
+
+// Basic middleware setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Serve static files from project root (for sound files)
+app.use(express.static(process.cwd()));
+
+// Simple request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
+  const reqPath = req.path;
+  
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+    if (reqPath.startsWith("/api")) {
+      serverLog(`${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`, "api");
     }
   });
-
+  
   next();
 });
 
-(async () => {
-  const server = await registerRoutes(app);
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+// Main startup function
+async function startServer() {
+  try {
+    serverLog("Starting server initialization...", "info");
+    
+    // Register API routes and get HTTP server
+    serverLog("Registering API routes...", "info");
+    const server = await registerRoutes(app);
+    
+    // Error handling middleware
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+      
+      serverLog(`Error: ${message}`, "error");
+      res.status(status).json({ message });
+    });
+    
+    // Setup frontend serving (Vite in dev, static in prod)
+    if (config.NODE_ENV !== "production") {
+      serverLog("Setting up Vite for development mode...", "info");
+      await setupVite(app, server);
+    } else {
+      serverLog("Setting up static file serving for production mode...", "info");
+      serveStatic(app);
+    }
+    
+    if (config.VERCEL) {
+      // Export for Vercel serverless function
+      serverLog("Running in Vercel serverless mode", "info");
+      // For Vercel, we need to export the Express app
+      module.exports = app;
+      // Also export the server handler for WebSocket support
+      module.exports.server = server; 
+    } else {
+      // Start local server
+      const port = Number(process.env.PORT || 5000);
+      server.listen(port, "0.0.0.0", () => {
+        console.clear(); // Clear console for cleaner output
+        serverLog(`Server running on port ${port} in ${config.NODE_ENV} mode`, "info");
+        serverLog("Server startup complete!", "info");
+      });
+    }
+    
+    return server;
+  } catch (error) {
+    serverLog(`Failed to start server: ${error}`, "error");
+    process.exit(1);
   }
+}
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
-})();
+// Start the server
+serverLog("Starting server...", "info");
+startServer();

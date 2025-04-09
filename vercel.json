@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "buildCommand": "chmod +x vercel-build.sh && ./vercel-build.sh",
+  "framework": null,
+  "outputDirectory": "dist/public",
+  "regions": ["iad1"],
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    { "source": "/ws", "destination": "/api/ws" },
+    { "source": "/api/expire-tasks", "destination": "/api/expire-tasks" },
+    { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/(.*)", "destination": "/api/server" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

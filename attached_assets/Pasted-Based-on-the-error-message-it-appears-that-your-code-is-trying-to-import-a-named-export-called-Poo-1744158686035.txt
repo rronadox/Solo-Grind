@@ -1,0 +1,59 @@
+Based on the error message, it appears that your code is trying to import a named export called `Pool` from the `pg` package using ES module syntax, but the package isn’t providing `Pool` that way. This situation is common when a package (like `pg`) is published using CommonJS by default, and you’re attempting to use ES module syntax to import from it.
+
+Below are a few approaches to resolve this issue:
+
+---
+
+### 1. Use the Default Import Syntax
+
+When the package is CommonJS, you can import the default export and then destructure it to get the `Pool` constructor. Change your import in your `server.js` file as follows:
+
+```js
+import pg from 'pg';
+const { Pool } = pg;
+```
+
+This syntax imports the entire module as the default export (`pg`), and then extracts `Pool` from it. This should resolve the syntax error because the module is loaded correctly as a CommonJS module.
+
+---
+
+### 2. Use CommonJS Syntax (Require)
+
+If you are not strictly required to use ES modules, you can switch to the CommonJS syntax (which is what the package uses by default):
+
+```js
+const { Pool } = require('pg');
+```
+
+This method avoids the mix of module systems and should work correctly in your server environment.
+
+---
+
+### 3. Adjust Your Project's Module Configuration
+
+If your project is configured to use ES modules (for example, if you have `"type": "module"` in your `package.json`), then using the default import syntax (Approach 1) is generally the best solution. However, if you don’t have this requirement, either remove `"type": "module"` or move to CommonJS syntax.
+
+---
+
+### Additional Considerations
+
+- **Check pg Version:**  
+  Ensure that your installed version of `pg` supports your chosen import style. Some later releases might adjust how the exports are handled, so reviewing the [pg documentation](https://node-postgres.com/) or release notes may provide additional context.
+
+- **Environment Consistency:**  
+  Since the error is happening during deployment on Vercel, double-check that your local environment (where things might work) and the Vercel build environment have the same Node.js version and module settings. Differences in the Node.js version or the `"type"` field in `package.json` can result in different module-loading behaviors.
+
+- **Vercel’s Build Configuration:**  
+  If you continue to face issues, you can configure your build settings in Vercel (for example, specifying a particular Node.js version) so that the runtime behavior mimics your local development environment.
+
+---
+
+By applying one of these adjustments, the import should resolve correctly, and the error should be eliminated. These modifications address the core issue of mixing module systems between ES modules and CommonJS which is the root cause of the error message:
+
+> `SyntaxError: The requested module 'pg' does not provide an export named 'Pool'`
+
+This change should let your API route run without crashing the function.
+
+---
+
+If you need more details or run into further issues, feel free to ask!
