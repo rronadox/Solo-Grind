@@ -80,7 +80,7 @@ async function startServer() {
       // For Vercel, we need to export the Express app
       module.exports = app;
       // Also export the server handler for WebSocket support
-      module.exports.server = server; 
+      module.exports.server = server;
     } else {
       // Start local server
       const port = Number(process.env.PORT || 5000);
